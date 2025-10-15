@@ -1,4 +1,4 @@
-gi==package com.example.utilitymetersystem
+package com.example.utilitymetersystem
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
