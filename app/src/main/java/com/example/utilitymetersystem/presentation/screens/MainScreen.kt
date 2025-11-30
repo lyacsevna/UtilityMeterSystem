@@ -7,17 +7,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.utilitymetersystem.data.models.UtilityReading
+import com.example.utilitymetersystem.data.models.UtilityType
 import com.example.utilitymetersystem.presentation.viewmodels.UtilityViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(navController: NavController, viewModel: UtilityViewModel) {
-    val readings = viewModel.readings.value
+    val readings by viewModel.readings.collectAsState()
 
     Scaffold(
         topBar = {
@@ -74,19 +77,11 @@ fun ReadingCard(reading: UtilityReading) {
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                text = when (reading.type) {
-                    com.example.utilitymetersystem.data.models.UtilityType.WATER -> "Вода"
-                    com.example.utilitymetersystem.data.models.UtilityType.ELECTRICITY -> "Электричество"
-                },
+                text = getUtilityTypeText(reading.type),
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "Значение: ${reading.value} ${
-                    when (reading.type) {
-                        com.example.utilitymetersystem.data.models.UtilityType.WATER -> "м³"
-                        com.example.utilitymetersystem.data.models.UtilityType.ELECTRICITY -> "кВт·ч"
-                    }
-                }"
+                text = "Значение: ${reading.value} ${getUtilityUnit(reading.type)}"
             )
             reading.note?.let { note ->
                 Text(
@@ -99,5 +94,21 @@ fun ReadingCard(reading: UtilityReading) {
                 style = MaterialTheme.typography.bodySmall
             )
         }
+    }
+}
+
+private fun getUtilityTypeText(type: String): String {
+    return when (type) {
+        "WATER" -> "Вода"
+        "ELECTRICITY" -> "Электричество"
+        else -> "Неизвестный тип"
+    }
+}
+
+private fun getUtilityUnit(type: String): String {
+    return when (type) {
+        "WATER" -> "м³"
+        "ELECTRICITY" -> "кВт·ч"
+        else -> ""
     }
 }

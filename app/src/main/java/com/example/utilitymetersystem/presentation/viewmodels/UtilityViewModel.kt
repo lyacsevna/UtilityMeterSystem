@@ -35,7 +35,7 @@ class UtilityViewModel @Inject constructor(
     fun addReading(type: UtilityType, value: Double, note: String?) {
         viewModelScope.launch {
             val reading = UtilityReading(
-                type = type,
+                type = type.name,
                 value = value,
                 note = note
             )

@@ -3,7 +3,6 @@ package com.example.utilitymetersystem.di
 import android.content.Context
 import androidx.room.Room
 import com.example.utilitymetersystem.data.database.AppDatabase
-import com.example.utilitymetersystem.data.dao.UtilityReadingDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,13 +21,9 @@ object DatabaseModule {
             context.applicationContext,
             AppDatabase::class.java,
             "utility_database"
-        )
-            .fallbackToDestructiveMigration()
-            .build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     @Provides
-    fun provideReadingDao(appDatabase: AppDatabase): UtilityReadingDao {
-        return appDatabase.utilityReadingDao()
-    }
+    fun provideReadingDao(appDatabase: AppDatabase) = appDatabase.utilityReadingDao()
 }

@@ -18,6 +18,6 @@ class ReadingRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getReadingsByType(type: String): List<UtilityReading> {
-        return utilityReadingDao.getReadingsByType(type) // Уберите .name, так как type уже String
+        return utilityReadingDao.getReadingsByType(type)
     }
 }
