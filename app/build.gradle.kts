@@ -56,6 +56,7 @@ dependencies {
 
     // Базовые зависимости Compose
     implementation("androidx.core:core-ktx:1.17.0")
+    implementation("com.jakewharton.threetenabp:threetenabp:1.4.6")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.activity:activity-compose:1.12.0")
     implementation(platform("androidx.compose:compose-bom:2025.11.01"))

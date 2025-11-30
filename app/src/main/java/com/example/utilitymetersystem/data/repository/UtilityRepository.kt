@@ -14,7 +14,7 @@ class UtilityRepository @Inject constructor(
     }
 
     fun getReadingsByType(type: UtilityType): Flow<List<UtilityReading>> {
-        return utilityReadingDao.getReadingsByType(type)
+        return utilityReadingDao.getReadingsByType(type) as Flow<List<UtilityReading>>
     }
 
     suspend fun insertReading(reading: UtilityReading) {
