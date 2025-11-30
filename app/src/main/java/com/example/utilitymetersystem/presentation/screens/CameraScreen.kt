@@ -1,7 +1,7 @@
 package com.example.utilitymetersystem.presentation.screens
 
 import android.content.Context
-import android.content.pm.PackageManager
+import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,28 +11,34 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.example.utilitymetersystem.data.models.UtilityType
 import com.example.utilitymetersystem.presentation.viewmodels.UtilityViewModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,47 +50,71 @@ fun CameraScreen(navController: NavController, viewModel: UtilityViewModel) {
     var selectedUtilityType by remember { mutableStateOf(UtilityType.WATER) }
     var noteText by remember { mutableStateOf("") }
     var confidenceLevel by remember { mutableStateOf(0) }
+    var currentImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showImagePreview by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Ланчер для запроса разрешения камеры
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            Log.d("CameraScreen", "Разрешение на камеру получено")
-        } else {
-            Log.d("CameraScreen", "Разрешение на камеру отклонено")
-        }
-    }
-
-    // Проверяем разрешение при запуске
-    val hasCameraPermission = remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
+    // Создаем временный файл для фотографии
+    val photoFile = remember { createImageFile(context) }
+    val photoUri = remember {
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            photoFile
         )
     }
 
-    // Запрашиваем разрешение если его нет
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission.value) {
-            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+    // Ланчер для галереи
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            currentImageUri = it
+            showImagePreview = true
+            processImageFromUri(context, it) { text, confidence ->
+                recognizedText = text
+                confidenceLevel = confidence
+                if (isAutoFillEnabled && confidence >= 70) {
+                    val number = extractCleanNumber(text)
+                    if (number.isNotBlank()) {
+                        extractedNumber = number
+                    }
+                }
+            }
         }
     }
 
-    // Функция для обработки распознанного текста
-    fun processRecognizedText(text: String, confidence: Int) {
-        recognizedText = text
-        confidenceLevel = confidence
-        if (isAutoFillEnabled && confidence >= 70) { // Только при высокой уверенности
-            val number = extractCleanNumber(text)
-            if (number.isNotBlank() && number != extractedNumber) {
-                extractedNumber = number
-                Log.d("AutoFill", "Автоматически заполнено: $number (уверенность: $confidence%)")
+    // Ланчер для съемки фото
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            currentImageUri = photoUri
+            showImagePreview = true
+            processImageFromUri(context, photoUri) { text, confidence ->
+                recognizedText = text
+                confidenceLevel = confidence
+                if (isAutoFillEnabled && confidence >= 70) {
+                    val number = extractCleanNumber(text)
+                    if (number.isNotBlank()) {
+                        extractedNumber = number
+                    }
+                }
             }
+        }
+    }
+
+    // Функция для сохранения и перехода на главную
+    fun saveAndNavigate() {
+        val number = extractedNumber.replace(",", ".").toDoubleOrNull() ?: 0.0
+        viewModel.addReading(
+            type = selectedUtilityType,
+            value = number,
+            note = if (noteText.isNotEmpty()) noteText else "Считано${if (currentImageUri != null) " с фото" else " камерой"}"
+        )
+        // Переход на главный экран
+        navController.navigate("main") {
+            popUpTo("main") { inclusive = true }
         }
     }
 
@@ -94,7 +124,23 @@ fun CameraScreen(navController: NavController, viewModel: UtilityViewModel) {
                 title = { Text("Сканирование показаний") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                },
+                actions = {
+                    // Кнопка для выбора из галереи
+                    IconButton(
+                        onClick = { galleryLauncher.launch("image/*") }
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Галерея")
+                    }
+                    // Кнопка для создания фотографии
+                    IconButton(
+                        onClick = {
+                            takePictureLauncher.launch(photoUri)
+                        }
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "Сфотографировать")
                     }
                 }
             )
@@ -102,15 +148,7 @@ fun CameraScreen(navController: NavController, viewModel: UtilityViewModel) {
         floatingActionButton = {
             if (extractedNumber.isNotEmpty()) {
                 FloatingActionButton(
-                    onClick = {
-                        val number = extractedNumber.replace(",", ".").toDoubleOrNull() ?: 0.0
-                        viewModel.addReading(
-                            type = selectedUtilityType,
-                            value = number,
-                            note = if (noteText.isNotEmpty()) noteText else "Считано камерой"
-                        )
-                        navController.popBackStack()
-                    }
+                    onClick = { saveAndNavigate() }
                 ) {
                     Icon(Icons.Default.Check, contentDescription = "Сохранить")
                 }
@@ -122,41 +160,123 @@ fun CameraScreen(navController: NavController, viewModel: UtilityViewModel) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (hasCameraPermission.value) {
-                // Камера с улучшенным распознаванием текста
-                CameraWithEnhancedTextRecognition(
-                    onTextRecognized = { text, confidence ->
-                        processRecognizedText(text, confidence)
+            if (showImagePreview && currentImageUri != null) {
+                // Показываем превью выбранного изображения
+                ImagePreviewSection(
+                    imageUri = currentImageUri!!,
+                    onBackToCamera = {
+                        showImagePreview = false
+                        currentImageUri = null
                     },
                     modifier = Modifier.weight(1f)
                 )
-
-                // Панель управления и отображения результатов
-                RecognitionResultsPanel(
-                    recognizedText = recognizedText,
-                    extractedNumber = extractedNumber,
-                    isAutoFillEnabled = isAutoFillEnabled,
-                    confidenceLevel = confidenceLevel,
-                    onAutoFillToggle = { isAutoFillEnabled = it },
-                    onNumberChange = { extractedNumber = it },
-                    selectedUtilityType = selectedUtilityType,
-                    onUtilityTypeChange = { selectedUtilityType = it },
-                    noteText = noteText,
-                    onNoteChange = { noteText = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                )
-
             } else {
-                // Если нет разрешения
-                PermissionRequestView(
-                    onRequestPermission = {
-                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                // Режим живой камеры
+                CameraWithEnhancedTextRecognition(
+                    onTextRecognized = { text, confidence ->
+                        recognizedText = text
+                        confidenceLevel = confidence
+                        if (isAutoFillEnabled && confidence >= 70) {
+                            val number = extractCleanNumber(text)
+                            if (number.isNotBlank() && number != extractedNumber) {
+                                extractedNumber = number
+                            }
+                        }
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.weight(1f)
                 )
             }
+
+            // Панель управления (всегда видна)
+            RecognitionResultsPanel(
+                recognizedText = recognizedText,
+                extractedNumber = extractedNumber,
+                isAutoFillEnabled = isAutoFillEnabled,
+                confidenceLevel = confidenceLevel,
+                onAutoFillToggle = { isAutoFillEnabled = it },
+                onNumberChange = { extractedNumber = it },
+                selectedUtilityType = selectedUtilityType,
+                onUtilityTypeChange = { selectedUtilityType = it },
+                noteText = noteText,
+                onNoteChange = { noteText = it },
+                hasImage = currentImageUri != null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ImagePreviewSection(
+    imageUri: Uri,
+    onBackToCamera: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        // Превью изображения с реальной картинкой
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            // Используем Coil для загрузки и отображения изображения
+            AsyncImage(
+                model = imageUri,
+                contentDescription = "Выбранное изображение",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.DarkGray),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.Center
+            )
+
+            // Полупрозрачный оверлей с информацией
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Photo,
+                        contentDescription = "Изображение",
+                        tint = Color.White,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Text(
+                        text = "Изображение загружено",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Обрабатывается для распознавания текста...",
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+
+        // Кнопка возврата к камере
+        Button(
+            onClick = onBackToCamera,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.White,
+                contentColor = Color.Black
+            )
+        ) {
+            Icon(Icons.Default.Camera, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Вернуться к живой камере")
         }
     }
 }
@@ -173,9 +293,32 @@ fun RecognitionResultsPanel(
     onUtilityTypeChange: (UtilityType) -> Unit,
     noteText: String,
     onNoteChange: (String) -> Unit,
+    hasImage: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
+        // Статус режима
+        if (hasImage) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.Blue.copy(alpha = 0.1f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Photo, contentDescription = null, tint = Color.Blue)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Режим обработки фото",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Blue
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
         // Переключатель авто-заполнения
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -192,7 +335,7 @@ fun RecognitionResultsPanel(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Выбор типа счетчика
         Text(
@@ -212,7 +355,7 @@ fun RecognitionResultsPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Поле для ввода числа
         Text(
@@ -223,7 +366,6 @@ fun RecognitionResultsPanel(
         OutlinedTextField(
             value = extractedNumber,
             onValueChange = { newValue ->
-                // Разрешаем только цифры и запятую
                 if (newValue.matches(Regex("[\\d,]*"))) {
                     onNumberChange(newValue)
                 }
@@ -234,13 +376,13 @@ fun RecognitionResultsPanel(
             trailingIcon = {
                 if (extractedNumber.isNotEmpty()) {
                     IconButton(onClick = { onNumberChange("") }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Очистить")
+                        Icon(Icons.Default.Clear, contentDescription = "Очистить")
                     }
                 }
             }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Поле для заметки
         Text(
@@ -258,73 +400,47 @@ fun RecognitionResultsPanel(
 
         // Информация о распознавании
         if (recognizedText.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = when {
-                        confidenceLevel >= 80 -> Color.Green.copy(alpha = 0.1f)
-                        confidenceLevel >= 60 -> Color.Yellow.copy(alpha = 0.1f)
-                        else -> Color.Red.copy(alpha = 0.1f)
-                    }
-                )
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Распознано:",
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        Text(
-                            text = "Уверенность: $confidenceLevel%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = when {
-                                confidenceLevel >= 80 -> Color.Green
-                                confidenceLevel >= 60 -> Color(0xFFFFA000)
-                                else -> Color.Red
-                            }
-                        )
-                    }
-                    Text(
-                        text = recognizedText,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(12.dp))
+            RecognitionInfoCard(recognizedText, confidenceLevel)
         }
     }
 }
 
 @Composable
-fun PermissionRequestView(
-    onRequestPermission: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "📷 Требуется доступ к камере",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "Для сканирования показаний счетчика необходимо разрешение на использование камеры",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            Button(
-                onClick = onRequestPermission
-            ) {
-                Text("Запросить разрешение")
+fun RecognitionInfoCard(recognizedText: String, confidenceLevel: Int) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                confidenceLevel >= 80 -> Color.Green.copy(alpha = 0.1f)
+                confidenceLevel >= 60 -> Color.Yellow.copy(alpha = 0.1f)
+                else -> Color.Red.copy(alpha = 0.1f)
             }
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Распознано:",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    text = "Уверенность: $confidenceLevel%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        confidenceLevel >= 80 -> Color.Green
+                        confidenceLevel >= 60 -> Color(0xFFFFA000)
+                        else -> Color.Red
+                    }
+                )
+            }
+            Text(
+                text = recognizedText,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }
@@ -336,6 +452,7 @@ fun CameraWithEnhancedTextRecognition(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // В функции CameraWithEnhancedTextRecognition замените:
     var lastStableText by remember { mutableStateOf("") }
     var stableCounter by remember { mutableStateOf(0) }
 
@@ -400,6 +517,56 @@ fun CameraWithEnhancedTextRecognition(
     )
 }
 
+private fun extractDigitalNumbersWithConfidence(visionText: Text): Pair<String, Int> {
+    var bestText = ""
+    var bestConfidence = 0
+    var totalConfidence = 0
+    var elementCount = 0
+
+    for (block in visionText.textBlocks) {
+        for (line in block.lines) {
+            val lineText = line.text
+            val lineConfidence = estimateConfidence(line)
+
+            val digitalText = extractCleanDigitalSequence(lineText)
+            if (digitalText.isNotBlank() && digitalText.length >= 3) {
+                if (digitalText.length > bestText.length ||
+                    (digitalText.length == bestText.length && lineConfidence > bestConfidence)) {
+                    bestText = digitalText
+                    bestConfidence = lineConfidence
+                }
+            }
+
+            totalConfidence += lineConfidence
+            elementCount++
+        }
+    }
+
+    if (bestText.isNotBlank() && bestConfidence >= 50) {
+        return Pair(bestText, bestConfidence)
+    }
+
+    val averageConfidence = if (elementCount > 0) totalConfidence / elementCount else 0
+    val fallbackText = extractCleanDigitalSequence(visionText.text)
+
+    return Pair(fallbackText, averageConfidence)
+}
+
+// Вспомогательная функция тоже должна быть вне класса
+private fun estimateConfidence(textElement: Text.Line): Int {
+    var confidence = 50
+
+    val cleanText = textElement.text.replace(Regex("[^\\d,]"), "")
+    val digitalRatio = cleanText.length.toDouble() / textElement.text.length.toDouble()
+
+    if (digitalRatio > 0.8) confidence += 30
+    if (digitalRatio > 0.9) confidence += 20
+
+    if (textElement.text.length < 3) confidence -= 20
+
+    return confidence.coerceIn(0, 100)
+}
+
 class EnhancedDigitalTextRecognitionAnalyzer(
     private val onTextRecognized: (String, Int) -> Unit
 ) : ImageAnalysis.Analyzer {
@@ -413,7 +580,10 @@ class EnhancedDigitalTextRecognitionAnalyzer(
 
             recognizer.process(image)
                 .addOnSuccessListener { visionText ->
-                    val (cleanText, confidence) = extractDigitalNumbersWithConfidence(visionText)
+                    // ИСПРАВЛЕНИЕ: убрать деструктуризацию
+                    val result = extractDigitalNumbersWithConfidence(visionText)
+                    val cleanText = result.first
+                    val confidence = result.second
                     if (cleanText.isNotBlank()) {
                         onTextRecognized(cleanText, confidence)
                     }
@@ -427,62 +597,6 @@ class EnhancedDigitalTextRecognitionAnalyzer(
         } else {
             imageProxy.close()
         }
-    }
-
-    private fun extractDigitalNumbersWithConfidence(visionText: Text): Pair<String, Int> {
-        var bestText = ""
-        var bestConfidence = 0
-        var totalConfidence = 0
-        var elementCount = 0
-
-        // Анализируем все текстовые элементы
-        for (block in visionText.textBlocks) {
-            for (line in block.lines) {
-                val lineText = line.text
-                val lineConfidence = estimateConfidence(line)
-
-                // Фильтруем только цифровые последовательности
-                val digitalText = extractCleanDigitalSequence(lineText)
-                if (digitalText.isNotBlank() && digitalText.length >= 3) {
-                    if (digitalText.length > bestText.length ||
-                        (digitalText.length == bestText.length && lineConfidence > bestConfidence)) {
-                        bestText = digitalText
-                        bestConfidence = lineConfidence
-                    }
-                }
-
-                totalConfidence += lineConfidence
-                elementCount++
-            }
-        }
-
-        // Если нашли хорошую цифровую последовательность, используем ее
-        if (bestText.isNotBlank() && bestConfidence >= 50) {
-            return Pair(bestText, bestConfidence)
-        }
-
-        // Иначе используем среднюю уверенность по всему тексту
-        val averageConfidence = if (elementCount > 0) totalConfidence / elementCount else 0
-        val fallbackText = extractCleanDigitalSequence(visionText.text)
-
-        return Pair(fallbackText, averageConfidence)
-    }
-
-    private fun estimateConfidence(textElement: Text.Line): Int {
-        // Простая эвристика для оценки уверенности
-        var confidence = 50 // Базовая уверенность
-
-        // Увеличиваем уверенность для чистых цифровых последовательностей
-        val cleanText = textElement.text.replace(Regex("[^\\d,]"), "")
-        val digitalRatio = cleanText.length.toDouble() / textElement.text.length.toDouble()
-
-        if (digitalRatio > 0.8) confidence += 30
-        if (digitalRatio > 0.9) confidence += 20
-
-        // Уменьшаем уверенность для коротких текстов
-        if (textElement.text.length < 3) confidence -= 20
-
-        return confidence.coerceIn(0, 100)
     }
 }
 
@@ -522,5 +636,40 @@ private fun getUtilityTypeText(type: UtilityType): String {
     return when (type) {
         UtilityType.WATER -> "Вода"
         UtilityType.ELECTRICITY -> "Электричество"
+    }
+}
+
+// Функции для работы с изображениями
+private fun createImageFile(context: Context): File {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+    val storageDir = context.getExternalFilesDir(null)
+    return File.createTempFile(
+        "JPEG_${timeStamp}_",
+        ".jpg",
+        storageDir
+    )
+}
+
+private fun processImageFromUri(
+    context: Context,
+    uri: Uri,
+    onResult: (String, Int) -> Unit
+) {
+    try {
+        val image = InputImage.fromFilePath(context, uri)
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+        recognizer.process(image)
+            .addOnSuccessListener { visionText ->
+                val (cleanText, confidence) = extractDigitalNumbersWithConfidence(visionText)
+                onResult(cleanText, confidence)
+            }
+            .addOnFailureListener { e ->
+                Log.e("ImageProcessing", "Ошибка обработки изображения: ${e.message}")
+                onResult("", 0)
+            }
+    } catch (e: Exception) {
+        Log.e("ImageProcessing", "Ошибка загрузки изображения: ${e.message}")
+        onResult("", 0)
     }
 }

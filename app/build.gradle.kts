@@ -93,11 +93,18 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.5.1")
     implementation("androidx.camera:camera-view:1.5.1")
 
+    // Для работы с галереей и камерой
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+
+    // Для работы с файлами и медиа
+    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+
     // ML Kit Text Recognition
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
 
     // Coil для изображений
-    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Тестовые зависимости
     testImplementation("junit:junit:4.13.2")
