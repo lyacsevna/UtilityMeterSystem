@@ -5,7 +5,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.utilitymetersystem.presentation.screens.AddReadingScreen
+import com.example.utilitymetersystem.presentation.screens.CameraScreen
 import com.example.utilitymetersystem.presentation.screens.MainScreen
 import com.example.utilitymetersystem.presentation.viewmodels.UtilityViewModel
 
@@ -24,6 +26,10 @@ fun NavGraph() {
         composable("add") {
             val viewModel: UtilityViewModel = hiltViewModel()
             AddReadingScreen(navController = navController, viewModel = viewModel)
+        }
+        composable("camera") {
+            val cameraViewModel: UtilityViewModel = hiltViewModel()
+            CameraScreen(navController, cameraViewModel)
         }
     }
 }

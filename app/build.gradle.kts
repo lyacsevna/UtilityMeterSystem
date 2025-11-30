@@ -1,3 +1,5 @@
+
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -55,6 +57,7 @@ android {
 dependencies {
 
     // Базовые зависимости Compose
+
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("com.jakewharton.threetenabp:threetenabp:1.4.6")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
@@ -77,6 +80,7 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.scenecore)
     kapt("androidx.room:room-compiler:2.8.4")
 
     // Hilt
