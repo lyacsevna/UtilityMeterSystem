@@ -53,6 +53,7 @@ android {
 }
 
 dependencies {
+
     // Базовые зависимости Compose
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")

@@ -7,11 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.compose.rememberNavController
 import com.example.utilitymetersystem.presentation.navigation.NavGraph
-import com.example.utilitymetersystem.presentation.viewmodels.UtilityViewModel
 import com.example.utilitymetersystem.ui.theme.UtilityMeterSystemTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -19,15 +15,21 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Добавьте логирование для отладки
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("CRASH", "Crash in thread: ${thread.name}", throwable)
+            throwable.printStackTrace()
+            finish()
+        }
+
         setContent {
             UtilityMeterSystemTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
-                    val viewModel: UtilityViewModel = hiltViewModel()
-                    NavGraph(navController = navController, viewModel = viewModel)
+                    NavGraph()
                 }
             }
         }

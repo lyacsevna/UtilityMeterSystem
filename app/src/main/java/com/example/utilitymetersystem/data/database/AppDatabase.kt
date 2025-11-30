@@ -12,7 +12,7 @@ import com.example.utilitymetersystem.data.converters.DateConverter
 @Database(
     entities = [UtilityReading::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(DateConverter::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -28,7 +28,8 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "utility_database"
-                ).build()
+                )
+                    .build()
                 INSTANCE = instance
                 instance
             }

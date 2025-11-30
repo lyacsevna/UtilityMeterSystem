@@ -1,43 +1,38 @@
 package com.example.utilitymetersystem.presentation.navigation
 
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
+import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
-import androidx.compose.runtime.Composable
-import com.example.utilitymetersystem.presentation.screens.*
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.utilitymetersystem.presentation.screens.AddReadingScreen
+import com.example.utilitymetersystem.presentation.screens.MainScreen
 import com.example.utilitymetersystem.presentation.viewmodels.UtilityViewModel
 
 @Composable
 fun NavGraph(
-    navController: NavHostController,
-    viewModel: UtilityViewModel,
-    startDestination: String = "registration"
+    navController: NavHostController = rememberNavController() // Дефолтное значение
 ) {
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = "main"
     ) {
-        composable("registration") {
-            RegistrationScreen(navController = navController)
-        }
-        composable("login") {
-            RegistrationScreen(navController = navController)
-        }
         composable("main") {
-            MainScreen(navController = navController, viewModel = viewModel)
+            // Каждый экран получает свой экземпляр ViewModel
+            val viewModel: UtilityViewModel = hiltViewModel()
+            MainScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
         }
-        composable("add_reading") {
-            AddReadingScreen(navController = navController, viewModel = viewModel)
-        }
-        composable("edit_reading") {
-            EditReadingScreen(navController = navController, viewModel = viewModel)
-        }
-        composable("history") {
-            HistoryScreen(navController = navController, viewModel = viewModel)
-        }
-        composable("camera") {
-            CameraScreen(navController = navController, viewModel = viewModel)
+        composable("add") {
+            // Отдельный экземпляр ViewModel для этого экрана
+            val viewModel: UtilityViewModel = hiltViewModel()
+            AddReadingScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
         }
     }
 }
