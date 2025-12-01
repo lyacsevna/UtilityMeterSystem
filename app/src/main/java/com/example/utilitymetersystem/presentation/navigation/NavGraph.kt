@@ -8,7 +8,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.utilitymetersystem.presentation.screens.AddReadingScreen
 import com.example.utilitymetersystem.presentation.screens.CameraScreen
+import com.example.utilitymetersystem.presentation.screens.HistoryScreen
 import com.example.utilitymetersystem.presentation.screens.MainScreen
+import com.example.utilitymetersystem.presentation.screens.StatisticsScreen
 import com.example.utilitymetersystem.presentation.viewmodels.UtilityViewModel
 
 @Composable
@@ -30,6 +32,13 @@ fun NavGraph() {
         composable("camera") {
             val cameraViewModel: UtilityViewModel = hiltViewModel()
             CameraScreen(navController, cameraViewModel)
+        }
+        // Добавьте новые маршруты в NavGraph
+        composable("history") {
+            HistoryScreen(navController, viewModel())
+        }
+        composable("statistics") {
+            StatisticsScreen(navController, viewModel())
         }
     }
 }

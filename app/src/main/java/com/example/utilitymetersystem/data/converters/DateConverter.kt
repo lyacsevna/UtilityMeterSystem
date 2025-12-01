@@ -1,21 +1,16 @@
 package com.example.utilitymetersystem.data.converters
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.room.TypeConverter
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.util.Date
 
 class DateConverter {
-
     @TypeConverter
-    fun fromLocalDateTime(date: LocalDateTime?): String? {
-        return date?.toString()
+    fun fromTimestamp(value: Long?): Date? {
+        return value?.let { Date(it) }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     @TypeConverter
-    fun toLocalDateTime(value: String?): LocalDateTime? {
-        return value?.let { LocalDateTime.parse(it) }
+    fun dateToTimestamp(date: Date?): Long? {
+        return date?.time
     }
 }

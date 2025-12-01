@@ -81,6 +81,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.8.4")
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.scenecore)
+    implementation(libs.androidx.ui)
     kapt("androidx.room:room-compiler:2.8.4")
 
     // Hilt
